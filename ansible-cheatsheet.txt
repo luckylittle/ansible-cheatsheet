@@ -2,6 +2,12 @@
 $ ansible-playbook <playbook>.yaml --list-hosts
 
 
+## Ansible works only if the passwordless access is configured:
+$ ssh-keygen
+$ ssh-copy-id lmaly@<HOST>
+$ ssh lmaly@<HOST>
+
+
 ## Ansible verbosity:
 $ ansible-playbook -v -i <HOST> <playbook>.yaml
 $ ansible-playbook -vv -i <HOST> <playbook>.yaml
@@ -42,6 +48,57 @@ $ ansible all -i <HOST>, -m setup
 
 ## Print all the tasks in short form that playbook would perform:
 $ ansible-playbook <playbook>.yaml --list-tasks
+
+
+## Jinja2 Template(s):
+---
+- hosts: all
+  remote_user: lmaly
+  tasks:
+  - name: Ensure the website is present and updated
+    template:
+      src: index.html.j2
+      dest: /var/www/html/index.html
+      owner: root
+      group: root
+      mode: 0644
+    become: True
+
+  # Variables in J2 template(s):
+    '{{ VARIABLE_NAME }}'
+    '{{ ARRAY_NAME['KEY'] }}'
+    '{{ OBJECT_NAME.PROPERTY_NAME }}'
+
+    # Example of index.html.j2 using variable:
+      <html>
+       <body>
+        <h1>Hello World!</h1>
+        <p>This page was created on {{ ansible_date_time.date }}.</p>
+       </body>
+      </html>
+
+  # Built-in Filtres in J2 template(s):
+    '{{ VARIABLE_NAME | capitalize }}'
+
+  # Conditionals:
+    a/
+    {% if ansible_eth0.active == True %}
+       <p>eth0 address {{ ansible_eth0.ipv4.address }}.</p>
+    {% endif %}
+
+    b/
+    {% if ansible_eth0.active is equalto True %}
+       <p>eth0 address {{ ansible_eth0.ipv4.address }}.</p>
+    {% endif %}
+
+  # Cycles:
+    {% for address in ansible_all_ipv4_addresses %}
+       <li>{{ address }}</li>
+    {% endfor %}
+  
+More information:
+http://jinja.pocoo.org/docs/dev/templates/#builtin-filters
+http://jinja.pocoo.org/docs/dev/templates/#builtin-tests
 
 
 ## CLI:
