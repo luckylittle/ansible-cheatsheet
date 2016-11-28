@@ -2,6 +2,26 @@
 $ ansible-playbook <playbook>.yaml --list-hosts
 
 
+## Inventory defaults:
+$ cat /etc/ansible/hosts
+$ grep host_file ansible.cfg
+  1) ANSIBLE_CONFIG (an environment variable)
+  2) ansible.cfg (in the current directory)
+  3) ~/.ansible.cfg
+  4) /etc/ansible/ansible.cfg
+! When using the '-i' parameter, if the value is a 'list' (it contains at least one comma) it will be used as the inventory list.
+! While the variable is a string, it will be used as the inventory path
+! It can be either FQDN or IP address
+  
+  # Inventory file Example
+    [webserver]    <-it can be reduced to ws[01:02].lmaly.io using regexp
+    ws01.lmaly.io   
+    ws02.lmaly.io   
+
+    [database]
+    db01.lmaly.io
+
+
 ## Ansible works only if the passwordless access is configured:
 $ ssh-keygen
 $ ssh-copy-id lmaly@<HOST>
@@ -16,7 +36,7 @@ $ ansible-playbook -vvv -i <HOST> <playbook>.yaml
 
 ## Playbook basics:
 ---                                       <-this needs to always be there as it indicates YAML!
-- hosts: all                              <-host or host group against we will run the task
+- hosts: all                              <-host or host group against we will run the task (example - hosts: webserver)
   remote_user: lmaly                      <-as what user will Ansible log in to the machine(s)
   tasks:                                  <-list of actions
   - name: Whatever you want to name it    <-name of the first task
@@ -38,8 +58,36 @@ $ ansible-playbook -vvv -i <HOST> <playbook>.yaml
     debug:
       msg: '{{ name }}'
 
-  # Alternative way - pass variable(s) in the CLI:
-  $ ansible-playbook -i <HOST>, <playbook>.yaml  -e 'name=test01'
+  # Alternative ways:
+    (1) pass variable(s) in the CLI:
+    $ ansible-playbook -i <HOST>, <playbook>.yaml  -e 'name=test01'
+
+    (2) pass variable(s) to an inventory file:
+    a/
+    [webserver]   <- all playbooks running on webservers will be able to refer to the domain name variable
+    ws01.lmaly.io domainname=example1.lmaly.io
+    ws02.lmaly.io domainname=example2.lmaly.io
+    
+    b/
+    [webserver:vars]    <- ! Host variables will override group variables in case tge same variable is used in both
+    https_enabled=True
+
+    (3) variable file(s):
+    a/ host_vars:
+    $ cat host_vars/ws01.lmaly.io
+      domainname=example1.lmaly.io
+    
+    b/ group_vars:
+    $ cat group_vars/webserver
+      https_enabled=True
+  
+  # Inventory variables hierarchy:
+    1) Common variable file - overrides everything, host/group/inventory variable files
+    2) Host variables       - overrides group variable files
+    3) Group variables      - overrides inventory variable files
+    ! Variables passed to the CLI have priority over any other variable.
+    ! You can override the following parameters from an inventory file:
+      ansible_user, ansible_port, ansible_host, ansible_connection, ansible_private_key_file, ansible_shell_type
 
 
 ## See the metadata obtained during Ansible setup:
