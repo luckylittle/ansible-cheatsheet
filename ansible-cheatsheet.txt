@@ -5,12 +5,15 @@ $ ansible-playbook <playbook>.yaml --list-hosts
 ## Inventory defaults:
 $ cat /etc/ansible/hosts
 $ grep host_file ansible.cfg
-  1) ANSIBLE_CONFIG (an environment variable)
-  2) ansible.cfg (in the current directory)
-  3) ~/.ansible.cfg
-  4) /etc/ansible/ansible.cfg
-! When using the '-i' parameter, if the value is a 'list' (it contains at least one comma) it will be used as the inventory list.
-! While the variable is a string, it will be used as the inventory path
+  Priority in which the config files are processed:
+   1) ANSIBLE_CONFIG (an environment variable)
+   2) ansible.cfg (in the current directory)
+   3) ~/.ansible.cfg
+   4) /etc/ansible/ansible.cfg
+! When using the '-i' parameter, if the value is a 'list' (it contains at least one comma) it will be used as the inventory list:
+  $ ansible -i /etc/ansible/hosts <playbook>.yaml
+! While the variable is a string, it will be used as the inventory path:
+  $ ansible -i localhost, <playbook>.yaml
 ! It can be either FQDN or IP address
   
   # Inventory file Example
@@ -20,6 +23,12 @@ $ grep host_file ansible.cfg
 
     [database]
     db01.lmaly.io
+
+  # Dynamic inventory - AWS
+    $ sudo cp ec2.py /etc/ansible/
+    $ sudo cp ec2.ini /etc/ansible/
+    $ sudo chmod +x /etc/ansible/ec2.py
+    $ ansible -i ec2.py all -m ping
 
 
 ## Ansible works only if the passwordless access is configured:
@@ -150,7 +159,8 @@ http://jinja.pocoo.org/docs/dev/templates/#builtin-tests
 
 
 ## CLI:
-(1)$ ansible
+(1) Run a command somewhere else using Ansible
+$ ansible
 Usage: ansible <host-pattern> [options]
 Options:
   -a MODULE_ARGS, --args=MODULE_ARGS
@@ -248,7 +258,8 @@ Options:
 
 
 
-(2)$ ansible-playbook
+(2) Run Ansible playbook
+$ ansible-playbook
 Usage: ansible-playbook playbook.yml
 Options:
   --ask-vault-pass      ask for vault password
@@ -346,7 +357,8 @@ Options:
 
 
 
-(3)$ ansible-pull 
+(3) Set up a remote copy of ansible on each managed node
+$ ansible-pull 
 Usage: ansible-pull -U <repository> [options]
 
 Options:
