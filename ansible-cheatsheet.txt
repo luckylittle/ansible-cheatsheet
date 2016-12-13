@@ -317,21 +317,102 @@ $ ansible-playbook <playbook>.yaml --list-tasks
     '{{ VARIABLE_NAME | capitalize }}'
 
   # Conditionals:
-    a/
+    Equal                                     "{{ max_memory }} == 512"
+    Less than                                 "{{ min_memory }} < 128"
+    Greater than                              "{{ min_memory }} > 256"
+    Less than or equal                        "{{ min_memory }} <= 256"
+    Greater than or equal                     "{{ min_memory }} >= 512"
+    Not equal                                 "{{ min_memory }} != 512"
+    Variable exists                           "{{ min_memory }} is defined"
+    Variable does not exist                   "{{ min_memory }} is not defined"
+    Variable set to 1, True, or yes           "{{ available_memory }}"
+    Variable set to 0, False, or no           "not {{ available_memory }}"
+    Value present in variable or array        "{{ users }} in users["db_admins"]"
+    AND                                       ansible_kernel == 3.10.el7.x86_64 and inventory_hostname in groups['staging']
+    OR                                        ansible_distribution == "RedHat" or ansible_distribution == "Fedora"
+    
+    a/ Equal to example
     {% if ansible_eth0.active == True %}
        <p>eth0 address {{ ansible_eth0.ipv4.address }}.</p>
     {% endif %}
 
-    b/
+    b/ Equal to example
     {% if ansible_eth0.active is equalto True %}
        <p>eth0 address {{ ansible_eth0.ipv4.address }}.</p>
     {% endif %}
+    
+    c/ 'when' statement example
+    - name: Create the database admin
+       user:
+        name: db_admin
+      when: inventory_hostname in groups["databases"]   <-when is not a module variable, it must be placed outside of the module
+     
+     d/ When combining 'when' with 'with_items', the when statement is processed for each item:
+     with_items: "{ ansible_mounts }"
+     when: item.mount == "/" and item.size_available > 300000000 
+
 
   # Cycles:
     {% for address in ansible_all_ipv4_addresses %}
        <li>{{ address }}</li>
     {% endfor %}
+
+  # Handlers - Task that responds to notification triggered by other tasks:
+    notify:
+     - restart_apache
+    handlers:
+     -name: restart_apache
+       service:
+        name: httpd:
+        state: restarted
+    !Task may call more than one handler in notify
+    !Ansible treats notify as an array and iterates over handler names
+    !Handlers run in order they are written in play, not in order listed by notify task
+    !If two handlers have same name, only one runs
+    !Handler runs only once, even if notified by more than one task
+    !Handlers defined inside 'include' cannot be notified
+
+  # Resource tagging
+    a/ Tasks
+       tags:
+        - packages
+    b/ Roles - all tasks they define also tagged
+       roles:
+        - { role: user, tags: [production] }
+    c/ Include - all tasks they define also tagged
+       - include: common.yml
+       tags: [testing]
+    $ ansible-playbook --tags "production"
+    $ ansible-playbook --skip-tags "development"
+    Special tags: always, tagged, untagged, all (default)
+
+  # Ignore and task errors
+    Default: If task fails, play is aborted immediatelly, same with handlers
+      To skip failed tasks, use 'ignore_errors: yes'
+    To force handler to be called even if task fails, use 'force_handlers: yes'
+    To mark task as failed even when it succeeds, use 'failed_when:
+       cmd: /usr/local/bin/create_user.show
+      register: command_result
+      failed_when: "'Password missing' in command_result.stdout"
+    Default: Task acquires 'changed' state after updating managed host, which causes handlers skipped if task does not make changed
+      changed_when: "'Success' in command_result.stdout"
   
+  # Blocks - logical grouping of tasks, controls how are they executed
+    a/ block:        <-main tasks to run
+    b/ rescue:       <-tasks to run if block tasks fail
+    c/ always:       <-tasks to always run, independent on a/ or b/
+    tasks:
+     - block:
+       - shell:
+          cmd: /usr/local/lib/upgrade-database
+         rescue:
+       - shell:
+          cmd: /usr/local/lib/create-user
+         always:
+       - service:
+          name: mariadb
+          state: restarted
+
 More information:
 http://jinja.pocoo.org/docs/dev/templates/#builtin-filters
 http://jinja.pocoo.org/docs/dev/templates/#builtin-tests
