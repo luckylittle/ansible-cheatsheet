@@ -98,9 +98,10 @@ Notes:
   !Use 'ansible-playbook --syntax-check <MYAML.YML>'
   !Use 'ansible-playbook -C <MYAML.YML>' for dry run (what changes would occur if playbook is executed?)
   !Use 'ansible-playbook --step <MYAML.YML>' to prompt each task (y=yes/n=no/c=exit and execute remaining without asking)
+  !For complex playbooks, use 'include' to include separate files in main playbook (include: tasks/env.yml)
 
 ## Variables:
---- # Comment field describing what it does
+--- # Usually comment field describing what it does
 - hosts: all
   remote_user: lmaly
   tasks:
@@ -111,35 +112,75 @@ Notes:
     debug:
       msg: '{{ name }}'
 
-  # Alternative ways:
+a/ In vars block:
+ vars:
+   set_fact: 'Test machine'
+
+b/ Passed as arguments:
+  include_vars: vars/extra_args.yml
+
+  # Other alternative ways:
     (1) pass variable(s) in the CLI:
     $ ansible-playbook -i <HOST>, <playbook>.yaml  -e 'name=test01'
 
     (2) pass variable(s) to an inventory file:
-    a/
-    [webserver]   <- all playbooks running on webservers will be able to refer to the domain name variable
-    ws01.lmaly.io domainname=example1.lmaly.io
-    ws02.lmaly.io domainname=example2.lmaly.io
+      a/
+      [webserver]   <- all playbooks running on webservers will be able to refer to the domain name variable
+      ws01.lmaly.io domainname=example1.lmaly.io
+      ws02.lmaly.io domainname=example2.lmaly.io
     
-    b/
-    [webserver:vars]    <- ! Host variables will override group variables in case tge same variable is used in both
-    https_enabled=True
-
-    (3) variable file(s):
-    a/ host_vars:
-    $ cat host_vars/ws01.lmaly.io
-      domainname=example1.lmaly.io
-    
-    b/ group_vars:
-    $ cat group_vars/webserver
+      b/
+      [webserver:vars]    <- ! Host variables will override group variables in case tge same variable is used in both
       https_enabled=True
+
+    (3) in variable file(s):
+      a/ host_vars:
+      $ cat host_vars/ws01.lmaly.io
+        domainname=example1.lmaly.io
+    
+      b/ group_vars:
+      $ cat group_vars/webserver
+        https_enabled=True
   
-  # Inventory variables hierarchy:
-    1) Common variable file - overrides everything, host/group/inventory variable files
-    2) Host variables       - overrides group variable files
-    3) Group variables      - overrides inventory variable files
-    ! Variables passed to the CLI have priority over any other variable.
-    ! You can override the following parameters from an inventory file:
+  !Variable must start with letter; valid characters are: letters, numbers, underscores
+  # Array definition example:
+    users:
+     bjones:
+      first_name: Bob
+      last_name: Jones
+     acook:
+      first_name: Anne
+      last_name: Cook
+  # Array accessing example:  
+    users.bjones.first_name             # Returns 'Bob'
+    users['bjones']['first_name']       # Returns 'Bob'  <-preferable method
+
+  # Inventory variables hierarchy/scope
+    !Three levels: Global, Play, Host
+    !If Ansible finds variables with the same name, it uses chain of preference (highest priority on the top):
+ ^   A) Common variable file     - overrides everything, host/group/inventory variable files
+ |      01) 'extra' variables via CLI (-e)
+ |      02) Task variables (only for task itself)
+ |      03) Defined in 'block' statement (- block:)
+ |      04) 'role' and 'include' variables
+ |      05) Included using 'vars_files' (vars_files: - /vars/env.yml)
+ |      06) 'vars_prompt' variables (vars_prompt:)
+ |      07) Defined with '-a' or '--args' command line
+ |      08) Defined via 'set_facts' (- set_fact: user: joe)
+ |      09) Registered variables with 'register' keyword for debugging
+ |      10) Host facts discovered by Ansible (ansible_facts)
+ |   B) Host variables           - overrides group variable files
+ |      11) 'host_vars' in host_vars directory
+ |   C) Group variables          - overrides inventory variable files
+ |      12) 'group_vars' in group_vars directory
+ |   D) Inventory variable files - lowest priority
+ |      13) 'host_vars' in the inventory file ([hostgroup:vars])
+ |      14) 'group_vars' in the inventory file ([hostgroup:children])
+ |      15) Inventory file variables - global
+ |      16) Role default variables - Set in roles vars directory
+
+    !Variables passed to the CLI have priority over any other variable.
+    !You can override the following parameters from an inventory file:
       ansible_user, ansible_port, ansible_host, ansible_connection, ansible_private_key_file, ansible_shell_type
 
 
@@ -193,6 +234,19 @@ $ ansible <group> -m setup
 $ ansible <group> -m setup --tree facts
 # Show the specific metadata:
 $ ansible <group> -m setup -a 'filter=*ipv4*'
+  # Examples:
+  {{ ansible_hostname }}
+  {{ ansible_default_ipv4.address }}
+  {{ ansible_devices.vda.partitions.vda1.size }}
+  {{ ansible_dns.nameservers }}
+  {{ ansible_kernel }}
+# To disable facts:
+  gather_facts: no
+# Custom facts are saved under ansible_local:
+  $ cat /etc/ansible/facts.d/new.fact    <-ini or json file
+  $ ansible demo1.example.com -m setup -a 'filter=ansible_local'
+# Accessing facts of another node:
+  {{ hostvars['demo2.example.com']['ansible_os_family'] }}
 
 # Run arbitrary command on all hosts as sudo:
 $ ansible all -s -a "cat /var/log/messages"
