@@ -186,31 +186,41 @@ b/ Passed as arguments:
 
 ## Iterates (http://docs.ansible.com/ansible/playbooks_loops.html)
    (1) Standard - 'with_items' example:
-   firewall
-       firewalld:
-         service: '{{ item }}'
-         state: enabled
-         permanent: True
-         immediate: True
-       become: True
-       with_items:
-       - http
-       - https
+       a/ Simple loop
+       firewall
+           firewalld:
+             service: '{{ item }}'
+             state: enabled
+             permanent: True
+             immediate: True
+             become: True
+          with_items:
+          - http
+          - https
+
+       b/ List of hashes
+       - user:
+          name: {{ item.name }}
+          state: present
+          groups: {{ item.groups }}
+         with_items:
+          - { name: 'jane', groups: 'wheel' }
+          - { name: 'joe', groups: 'root' }
 
    (2) Nested loops (iterate all elements of a list with all items from other lists) - 'with_nested' example:
-   user:
-     name: '{{ item }}'
-   become: True
-   with_items:
-   - '{{ users }}'
-   file:
-     path: '/home/{{ item.0 }}/{{ item.1 }}'
-     state: directory
-   become: True
-   with_nested:
-   - '{{ users }}'
-   - '{{ folders }}'
-
+       user:
+         name: '{{ item }}'
+       become: True
+       with_items:
+       - '{{ users }}'
+       file:
+         path: '/home/{{ item.0 }}/{{ item.1 }}'
+         state: directory
+       become: True
+       with_nested:
+       - '{{ users }}'
+       - '{{ folders }}'
+      
    (3) Fileglobs loop (action on every file present in a certain folder) - 'with_fileglobs' example:
    copy:
      src: '{{ item }}'
@@ -227,6 +237,20 @@ b/ Passed as arguments:
    with_sequence: start=1 end=10
    become: True
 
+   Notes:
+   with_file - Takes list of file names; 'item' set to content of each file in sequence
+   with_fileglob - Takes file name globbing pattern; 'item' set to each file in directory that matches pattern; in sequence, nonrecursively
+   with_sequence - Generates sequence of items in increasing numerical order; Can take 'start' and 'end' arguments
+                 - Supports decimal, octal, hexadecimal integer values
+   with_random_choices - Takes list; 'item' set to one list item at random
+
+
+## Register - To capture output of module that uses array
+   - shell: echo "{{ item }}"
+   with_items:
+     - one
+     - two
+   register: echo
 
 ## See the metadata obtained during Ansible setup (module setup):
 $ ansible all -i <HOST>, -m setup
