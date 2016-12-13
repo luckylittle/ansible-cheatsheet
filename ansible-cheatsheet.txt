@@ -1,30 +1,60 @@
 ## Which hosts will the playbook run against?
 $ ansible-playbook <playbook>.yaml --list-hosts
 
+## Which hosts are in the hosts file?
+$ ansible all --list-hosts
+$ ansible '192.168.2.*' -i <myinventory> --list-hosts                     <-everything that matches the wildcard
+$ ansible lab:datacenter1 -i <myinventory> --list-hosts                   <-members of lab OR datacenter1
+$ ansible 'lab:&datacenter1' -i <myinventory> --list-hosts                <-members of lab AND datacenter1
+$ ansible 'datacenter:!test2.example.com' -i <myinventory> --list-hosts   <-exclude host
 
-## Inventory defaults:
+
+## Configuration, Inventory defaults:
 $ cat /etc/ansible/hosts
 $ grep host_file ansible.cfg
   Priority in which the config files are processed:
    1) ANSIBLE_CONFIG (an environment variable)
-   2) ansible.cfg (in the current directory)
+   2) ./ansible.cfg (in the current directory)
    3) ~/.ansible.cfg
    4) /etc/ansible/ansible.cfg
-! When using the '-i' parameter, if the value is a 'list' (it contains at least one comma) it will be used as the inventory list:
+  $ ansible --version     <-shows what config file is currently being used
+
+Commonly Modified Settings in 'ansible.cfg':
+inventory= Location of Ansible inventory file
+remote user= Remote user account used to establish connections to managed hosts
+become= Enables/disables privilege escalation for operations on managed hosts (NOT BY DEFAULT!)
+become_method= Defines privilege escalation method
+become_user= User account for escalating privileges
+become_ask_pass= Defines whether privilege escalation prompts for password
+
+
+! When using the '-i' parameter, if the value is a 'list' (it contains at least one comma) it will be used as the inventory LIST:
   $ ansible -i /etc/ansible/hosts <playbook>.yaml
-! While the variable is a string, it will be used as the inventory path:
+! While the variable is a string, it will be used as the inventory PATH:
   $ ansible -i localhost, <playbook>.yaml
 ! It can be either FQDN or IP address
   
   # Inventory file Example
-    [webserver]    <-it can be reduced to ws[01:02].lmaly.io using regexp
+    [webserver]          <-both hosts can be reduced to ws[01:02].lmaly.io using regexp
     ws01.lmaly.io   
-    ws02.lmaly.io   
+    ws02.lmaly.io:1234   <-configured to listen on port 1234 
 
     [database]
     db01.lmaly.io
+    192.168.[1:5].[0:255]  <-includes 192.168.1.0/24 through 192.168.5.0/24
+
+    [nsw_cities:children] <-nested groups use the keyword :children
+    webserver
+    database
+    others
+
+    [others]
+    localhost ansible_connection=local                        <-it will use local connection, without SSH
+    192.168.3.7 ansible_connection=ssh ansible_user=ftaylor   <-use different settings example
 
   # Dynamic inventory - AWS
+  !Script must support '--list' an '--host' parameters, e.g.:
+  $ ./inventiryscript --list
     $ sudo cp ec2.py /etc/ansible/
     $ sudo cp ec2.ini /etc/ansible/
     $ sudo chmod +x /etc/ansible/ec2.py
@@ -44,19 +74,33 @@ $ ansible-playbook -vvv -i <HOST> <playbook>.yaml
 
 
 ## Playbook basics:
----                                       <-this needs to always be there as it indicates YAML!
+---                                       <-indicates YAML, optional document marker
 - hosts: all                              <-host or host group against we will run the task (example - hosts: webserver)
   remote_user: lmaly                      <-as what user will Ansible log in to the machine(s)
   tasks:                                  <-list of actions
   - name: Whatever you want to name it    <-name of the first task
     yum:                                  
       name: httpd                         
-      state: present                      
+      state: present                      <-same as single line 'yum: name=httpd state=present become=True'
       become: True                        <-task will be executed with sudo
+...                                       <-optional document marker indicating end of YAML
 
+Notes:
+  !Space characters used for indentation
+  !Pipe (|) preservers line returns within string
+  !Arrow (>) converts line returns to spaces, removes leading space in lines
+  !Indentation rules:
+   Elements at same level in hierarchy must have same indentation
+   Child elements must be indented further than parents
+   No rules about exact number of spaces to use
+  !Optional: Insert blank lines for readability
+  !Use YAML Lint http://yamllint.com to check the syntax correctness
+  !Use 'ansible-playbook --syntax-check <MYAML.YML>'
+  !Use 'ansible-playbook -C <MYAML.YML>' for dry run (what changes would occur if playbook is executed?)
+  !Use 'ansible-playbook --step <MYAML.YML>' to prompt each task (y=yes/n=no/c=exit and execute remaining without asking)
 
 ## Variables:
----
+--- # Comment field describing what it does
 - hosts: all
   remote_user: lmaly
   tasks:
@@ -99,9 +143,66 @@ $ ansible-playbook -vvv -i <HOST> <playbook>.yaml
       ansible_user, ansible_port, ansible_host, ansible_connection, ansible_private_key_file, ansible_shell_type
 
 
-## See the metadata obtained during Ansible setup:
-$ ansible all -i <HOST>, -m setup
+## Iterates (http://docs.ansible.com/ansible/playbooks_loops.html)
+   (1) Standard - 'with_items' example:
+   firewall
+       firewalld:
+         service: '{{ item }}'
+         state: enabled
+         permanent: True
+         immediate: True
+       become: True
+       with_items:
+       - http
+       - https
 
+   (2) Nested loops (iterate all elements of a list with all items from other lists) - 'with_nested' example:
+   user:
+     name: '{{ item }}'
+   become: True
+   with_items:
+   - '{{ users }}'
+   file:
+     path: '/home/{{ item.0 }}/{{ item.1 }}'
+     state: directory
+   become: True
+   with_nested:
+   - '{{ users }}'
+   - '{{ folders }}'
+
+   (3) Fileglobs loop (action on every file present in a certain folder) - 'with_fileglobs' example:
+   copy:
+     src: '{{ item }}'
+     dest: '/tmp/iproute2'
+     remote_src: True
+   become: True
+   with_fileglob:
+   - '/etc/iproute2/rt_*'
+
+   (4) Integer loop (iterate over the integer numbers) - 'with_sequence' example:
+   file:
+     dest: '/tmp/dir{{ item }}'
+     state: directory
+   with_sequence: start=1 end=10
+   become: True
+
+
+## See the metadata obtained during Ansible setup (module setup):
+$ ansible all -i <HOST>, -m setup
+$ ansible <group> -m setup
+$ ansible <group> -m setup --tree facts
+# Show the specific metadata:
+$ ansible <group> -m setup -a 'filter=*ipv4*'
+
+# Run arbitrary command on all hosts as sudo:
+$ ansible all -s -a "cat /var/log/messages"
+# Run Ad Hoc module with arguments:
+$ ansible host pattern -m module -a 'argument1 argument2' [-i inventory]
+# Run ad hoc command that generates one line input for each operation:
+$ ansible myhosts -m command -a /usr/bin/hostname -o
+# Default module (command, NOT SHELL!) is defined in 'ansible.cfg' under 'defaults' section:
+$ grep module_name /etc/ansible/ansible.cfg
+  !If no modules defined, predefined command module used
 
 ## Print all the tasks in short form that playbook would perform:
 $ ansible-playbook <playbook>.yaml --list-tasks
@@ -157,6 +258,18 @@ More information:
 http://jinja.pocoo.org/docs/dev/templates/#builtin-filters
 http://jinja.pocoo.org/docs/dev/templates/#builtin-tests
 
+
+## Modules
+ # Custom modules
+   Priority in which the custom module is being processed:
+   1, ANSIBLE_LIBRARY environment variable
+   2, 'library' in the ansible.cfg
+   3, ./library/ relative to location of playbook in use
+ # Default modules
+   $ cd /usr/lib/python2.7/site-packages/ansible/modules
+   $ ansible-doc -l
+   $ ansible-doc <MODULE>
+   $ ansible-doc -s <MODULE>
 
 ## CLI:
 (1) Run a command somewhere else using Ansible
@@ -357,7 +470,7 @@ Options:
 
 
 
-(3) Set up a remote copy of ansible on each managed node
+(3) Set up a remote copy of ansible on each managed node (clone Ansible configuration files from Git repository)
 $ ansible-pull 
 Usage: ansible-pull -U <repository> [options]
 
@@ -445,3 +558,17 @@ Options:
     --ask-su-pass       ask for su password (deprecated, use become)
     -K, --ask-become-pass
                         ask for privilege escalation password
+
+(4) Accessing documentation locally
+$ ansible-doc
+Usage: ansible-doc [options] [module...]
+
+Options:
+  -h, --help            show this help message and exit
+  -l, --list            List available modules
+  -M MODULE_PATH, --module-path=MODULE_PATH
+                        specify path(s) to module library (default=None)
+  -s, --snippet         Show playbook snippet for specified module(s)
+  -v, --verbose         verbose mode (-vvv for more, -vvvv to enable
+                        connection debugging)
+  --version             show program's version number and exit
