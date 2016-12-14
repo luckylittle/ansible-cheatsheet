@@ -702,6 +702,68 @@ Variable types:
   - lock.stat.exists
 
 ###############################################################################
+## Ansible Tower
+   Web-based interface
+   Enterprise solution for IT automation
+   Dashboard for managing deployments and monitoring resources
+   Adds automation, visual management, monitoring capabilities to Ansible
+   Gives administrators control over user access
+    Uses SSH credentials
+    Blocks access to or transfer of credentials
+   Implements continuous delivery and configuration management
+   Integrates management in single tool
+
+# Installation - Configuration file:
+  tower_setup_conf.yml under setup bundle directory
+
+  Installation - 'configure' options:
+  -l                      <-install on local machine with internal PostgreSQL   
+  --no-secondary-prompt   <-skip prompts regarding secondary Tower nodes to be added  
+  -A                      <-Disable aut-generation of PostgreSQL password, prompt user for passwords
+  -o <FILE>               <-source for configuration answers
+
+  Installation - after the config file is ready:
+  ./setup.sh
+  -c <FILE>               <-specify file that stores the configuration
+  -i <FILE>               <-
+  -p                      <-specify file to use for host inventory
+  -s                      <-require Ansible to prompt for SSH passwords
+  -u                      <-require Ansible to prompt for sudo passwords
+  -e                      <-set additional variables during installation
+  -b                      <-perform database backup instead of installing Tower
+  -r <BACKUP_FILE>        <-perform database restore instead of installing Tower
+
+  Changing your password:
+  $ sudo tower-manage changepassword admin
+
+# SSL certificate:
+  /etc/tower/awx.cert
+  /etc/tower/awx.key
+
+# REST API from CLI example:
+  $ curl -s http://demo.lab.example.com/api/v1/ping | json_reformat
+
+# User types:
+  normal
+  organization admin
+  superuser
+
+# User permissions:
+  read
+  write
+  admin
+  execute commands
+  check
+  run
+  create
+
+# Projects:
+  /var/lib/awx/projects
+  $ sudo mkdir /var/lib/awx/projects/demoproject
+  $ sudo cp demo.yml /var/lib/awx/projects/demoproject
+  $ sudo chown -R awx /var/lib/awx/projects/demoproject
+
+###############################################################################
 ## CLI:
 (1) Run a command somewhere else using Ansible
 $ ansible
