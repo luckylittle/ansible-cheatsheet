@@ -1,15 +1,13 @@
-## Which hosts will the playbook run against?
-$ ansible-playbook <playbook>.yaml --list-hosts
+###############################################################################
+## Lucian Maly <lmaly@odecee.com.au>
+###############################################################################
 
-## Which hosts are in the hosts file?
-$ ansible all --list-hosts
-$ ansible '192.168.2.*' -i <myinventory> --list-hosts                     <-everything that matches the wildcard
-$ ansible lab:datacenter1 -i <myinventory> --list-hosts                   <-members of lab OR datacenter1
-$ ansible 'lab:&datacenter1' -i <myinventory> --list-hosts                <-members of lab AND datacenter1
-$ ansible 'datacenter:!test2.example.com' -i <myinventory> --list-hosts   <-exclude host
+## Ansible works best if the passwordless access is configured on all nodes:
+$ ssh-keygen
+$ ssh-copy-id lmaly@<HOST>
+$ ssh lmaly@<HOST>
 
-
-## Configuration, Inventory defaults:
+## Configuration, Inventory default(s):
 $ cat /etc/ansible/hosts
 $ grep host_file ansible.cfg
   Priority in which the config files are processed:
@@ -27,14 +25,21 @@ become_method= Defines privilege escalation method
 become_user= User account for escalating privileges
 become_ask_pass= Defines whether privilege escalation prompts for password
 
-
-! When using the '-i' parameter, if the value is a 'list' (it contains at least one comma) it will be used as the inventory LIST:
-  $ ansible -i /etc/ansible/hosts <playbook>.yaml
-! While the variable is a string, it will be used as the inventory PATH:
+###############################################################################
+## Run the playbook(s):
   $ ansible -i localhost, <playbook>.yaml
-! It can be either FQDN or IP address
-  
-  # Inventory file Example
+    !When using the '-i' parameter, if the value is a 'list' (it contains at least one comma) it will be used as the inventory LIST
+    !It can be either FQDN or IP address
+  $ ansible -i /etc/ansible/hosts <playbook>.yaml
+    !While the variable is a string, it will be used as the inventory PATH
+
+## Ansible verbosity:
+$ ansible-playbook -v -i <HOST> <playbook>.yaml
+$ ansible-playbook -vv -i <HOST> <playbook>.yaml
+$ ansible-playbook -vvv -i <HOST> <playbook>.yaml
+
+###############################################################################
+## Inventory file examples:
     [webserver]          <-both hosts can be reduced to ws[01:02].lmaly.io using regexp
     ws01.lmaly.io   
     ws02.lmaly.io:1234   <-configured to listen on port 1234 
@@ -60,19 +65,21 @@ become_ask_pass= Defines whether privilege escalation prompts for password
     $ sudo chmod +x /etc/ansible/ec2.py
     $ ansible -i ec2.py all -m ping
 
+###############################################################################
+## Which hosts will the playbook run against?
+$ ansible-playbook <playbook>.yaml --list-hosts
 
-## Ansible works only if the passwordless access is configured:
-$ ssh-keygen
-$ ssh-copy-id lmaly@<HOST>
-$ ssh lmaly@<HOST>
+## Which hosts are in the hosts file?
+$ ansible all --list-hosts
+$ ansible '192.168.2.*' -i <myinventory> --list-hosts                     <-everything that matches the wildcard
+$ ansible lab:datacenter1 -i <myinventory> --list-hosts                   <-members of lab OR datacenter1
+$ ansible 'lab:&datacenter1' -i <myinventory> --list-hosts                <-members of lab AND datacenter1
+$ ansible 'datacenter:!test2.example.com' -i <myinventory> --list-hosts   <-exclude host
 
+## Print all the tasks in short form that playbook would perform:
+$ ansible-playbook <playbook>.yaml --list-tasks
 
-## Ansible verbosity:
-$ ansible-playbook -v -i <HOST> <playbook>.yaml
-$ ansible-playbook -vv -i <HOST> <playbook>.yaml
-$ ansible-playbook -vvv -i <HOST> <playbook>.yaml
-
-
+###############################################################################
 ## Playbook basics:
 ---                                       <-indicates YAML, optional document marker
 - hosts: all                              <-host or host group against we will run the task (example - hosts: webserver)
@@ -100,6 +107,7 @@ Notes:
   !Use 'ansible-playbook --step <MYAML.YML>' to prompt each task (y=yes/n=no/c=exit and execute remaining without asking)
   !For complex playbooks, use 'include' to include separate files in main playbook (include: tasks/env.yml)
 
+###############################################################################
 ## Variables:
 --- # Usually comment field describing what it does
 - hosts: all
@@ -151,7 +159,7 @@ b/ Passed as arguments:
      acook:
       first_name: Anne
       last_name: Cook
-  # Array accessing example:  
+  # Array accessing/reading example:  
     users.bjones.first_name             # Returns 'Bob'
     users['bjones']['first_name']       # Returns 'Bob'  <-preferable method
 
@@ -183,7 +191,7 @@ b/ Passed as arguments:
     !You can override the following parameters from an inventory file:
       ansible_user, ansible_port, ansible_host, ansible_connection, ansible_private_key_file, ansible_shell_type
 
-
+###############################################################################
 ## Iterates (http://docs.ansible.com/ansible/playbooks_loops.html)
    (1) Standard - 'with_items' example:
        a/ Simple loop
@@ -244,7 +252,32 @@ b/ Passed as arguments:
                  - Supports decimal, octal, hexadecimal integer values
    with_random_choices - Takes list; 'item' set to one list item at random
 
+   Note - Conditionals:
+   Equal                                     "{{ max_memory }} == 512"
+   Less than                                 "{{ min_memory }} < 128"
+   Greater than                              "{{ min_memory }} > 256"
+   Less than or equal                        "{{ min_memory }} <= 256"
+   Greater than or equal                     "{{ min_memory }} >= 512"
+   Not equal                                 "{{ min_memory }} != 512"
+   Variable exists                           "{{ min_memory }} is defined"
+   Variable does not exist                   "{{ min_memory }} is not defined"
+   Variable set to 1, True, or yes           "{{ available_memory }}"
+   Variable set to 0, False, or no           "not {{ available_memory }}"
+   Value present in variable or array        "{{ users }} in users["db_admins"]"
+   AND                                       ansible_kernel == 3.10.el7.x86_64 and inventory_hostname in groups['staging']
+   OR                                        ansible_distribution == "RedHat" or ansible_distribution == "Fedora"
 
+    (5) 'when' statement example
+    - name: Create the database admin
+       user:
+        name: db_admin
+      when: inventory_hostname in groups["databases"]   <-when is not a module variable, it must be placed outside of the module
+     
+    (6) When combining 'when' with 'with_items', the when statement is processed for each item:
+     with_items: "{ ansible_mounts }"
+     when: item.mount == "/" and item.size_available > 300000000 
+
+###############################################################################
 ## Register - To capture output of module that uses array
    - shell: echo "{{ item }}"
    with_items:
@@ -252,6 +285,67 @@ b/ Passed as arguments:
      - two
    register: echo
 
+###############################################################################
+## Handlers - Task that responds to notification triggered by other tasks:
+    notify:
+     - restart_apache
+    handlers:
+     -name: restart_apache
+       service:
+        name: httpd:
+        state: restarted
+    !Task may call more than one handler in notify
+    !Ansible treats notify as an array and iterates over handler names
+    !Handlers run in order they are written in play, not in order listed by notify task
+    !If two handlers have same name, only one runs
+    !Handler runs only once, even if notified by more than one task
+    !Handlers defined inside 'include' cannot be notified
+
+###############################################################################
+## Resource tagging
+    a/ Tasks
+       tags:
+        - packages
+    b/ Roles - all tasks they define also tagged
+       roles:
+        - { role: user, tags: [production] }
+    c/ Include - all tasks they define also tagged
+       - include: common.yml
+       tags: [testing]
+    $ ansible-playbook --tags "production"
+    $ ansible-playbook --skip-tags "development"
+    Special tags: always, tagged, untagged, all (default)
+
+###############################################################################
+## Ignore and task errors
+    Default: If task fails, play is aborted immediatelly, same with handlers
+      To skip failed tasks, use 'ignore_errors: yes'
+    To force handler to be called even if task fails, use 'force_handlers: yes'
+    To mark task as failed even when it succeeds, use 'failed_when:
+       cmd: /usr/local/bin/create_user.show
+      register: command_result
+      failed_when: "'Password missing' in command_result.stdout"
+    Default: Task acquires 'changed' state after updating managed host, which causes handlers skipped if task does not make changed
+      changed_when: "'Success' in command_result.stdout"
+  
+  ###############################################################################
+  ## Blocks - logical grouping of tasks, controls how are they executed
+    a/ block:        <-main tasks to run
+    b/ rescue:       <-tasks to run if block tasks fail
+    c/ always:       <-tasks to always run, independent on a/ or b/
+    tasks:
+     - block:
+       - shell:
+          cmd: /usr/local/lib/upgrade-database
+         rescue:
+       - shell:
+          cmd: /usr/local/lib/create-user
+         always:
+       - service:
+          name: mariadb
+          state: restarted
+
+###############################################################################
 ## See the metadata obtained during Ansible setup (module setup):
 $ ansible all -i <HOST>, -m setup
 $ ansible <group> -m setup
@@ -272,6 +366,7 @@ $ ansible <group> -m setup -a 'filter=*ipv4*'
 # Accessing facts of another node:
   {{ hostvars['demo2.example.com']['ansible_os_family'] }}
 
+###############################################################################
 # Run arbitrary command on all hosts as sudo:
 $ ansible all -s -a "cat /var/log/messages"
 # Run Ad Hoc module with arguments:
@@ -282,19 +377,16 @@ $ ansible myhosts -m command -a /usr/bin/hostname -o
 $ grep module_name /etc/ansible/ansible.cfg
   !If no modules defined, predefined command module used
 
-## Print all the tasks in short form that playbook would perform:
-$ ansible-playbook <playbook>.yaml --list-tasks
-
-
-## Jinja2 Template(s):
+###############################################################################
+## Jinja2 Template(s) - no need for file extension:
 ---
 - hosts: all
   remote_user: lmaly
   tasks:
   - name: Ensure the website is present and updated
     template:
-      src: index.html.j2
-      dest: /var/www/html/index.html
+      src: index.html.j2                           <-the J2 template source
+      dest: /var/www/html/index.html               <-destination
       owner: root
       group: root
       mode: 0644
@@ -306,6 +398,7 @@ $ ansible-playbook <playbook>.yaml --list-tasks
     '{{ OBJECT_NAME.PROPERTY_NAME }}'
 
     # Example of index.html.j2 using variable:
+      # {{ ansible_managed }}                <-recommended to include it in each template
       <html>
        <body>
         <h1>Hello World!</h1>
@@ -313,111 +406,47 @@ $ ansible-playbook <playbook>.yaml --list-tasks
        </body>
       </html>
 
+  # Comments:
+    {# ... #}
+
   # Built-in Filtres in J2 template(s):
     '{{ VARIABLE_NAME | capitalize }}'
+    '{{ output | to_json }}
+    '{{ output | to_yaml }}
+    '{{ output | to_nice_json }}
+    '{{ output | to_nice_yaml }}
+    '{{ output | from_json }}
+    '{{ output | from_yaml }}
 
   # Conditionals:
-    Equal                                     "{{ max_memory }} == 512"
-    Less than                                 "{{ min_memory }} < 128"
-    Greater than                              "{{ min_memory }} > 256"
-    Less than or equal                        "{{ min_memory }} <= 256"
-    Greater than or equal                     "{{ min_memory }} >= 512"
-    Not equal                                 "{{ min_memory }} != 512"
-    Variable exists                           "{{ min_memory }} is defined"
-    Variable does not exist                   "{{ min_memory }} is not defined"
-    Variable set to 1, True, or yes           "{{ available_memory }}"
-    Variable set to 0, False, or no           "not {{ available_memory }}"
-    Value present in variable or array        "{{ users }} in users["db_admins"]"
-    AND                                       ansible_kernel == 3.10.el7.x86_64 and inventory_hostname in groups['staging']
-    OR                                        ansible_distribution == "RedHat" or ansible_distribution == "Fedora"
-    
-    a/ Equal to example
+    { % ... % }
+    a/ Equal to example A
     {% if ansible_eth0.active == True %}
        <p>eth0 address {{ ansible_eth0.ipv4.address }}.</p>
     {% endif %}
 
-    b/ Equal to example
+    b/ Equal to example B
     {% if ansible_eth0.active is equalto True %}
        <p>eth0 address {{ ansible_eth0.ipv4.address }}.</p>
     {% endif %}
     
-    c/ 'when' statement example
-    - name: Create the database admin
-       user:
-        name: db_admin
-      when: inventory_hostname in groups["databases"]   <-when is not a module variable, it must be placed outside of the module
-     
-     d/ When combining 'when' with 'with_items', the when statement is processed for each item:
-     with_items: "{ ansible_mounts }"
-     when: item.mount == "/" and item.size_available > 300000000 
-
-
-  # Cycles:
+  # Cycles/loops:
     {% for address in ansible_all_ipv4_addresses %}
        <li>{{ address }}</li>
     {% endfor %}
 
-  # Handlers - Task that responds to notification triggered by other tasks:
-    notify:
-     - restart_apache
-    handlers:
-     -name: restart_apache
-       service:
-        name: httpd:
-        state: restarted
-    !Task may call more than one handler in notify
-    !Ansible treats notify as an array and iterates over handler names
-    !Handlers run in order they are written in play, not in order listed by notify task
-    !If two handlers have same name, only one runs
-    !Handler runs only once, even if notified by more than one task
-    !Handlers defined inside 'include' cannot be notified
-
-  # Resource tagging
-    a/ Tasks
-       tags:
-        - packages
-    b/ Roles - all tasks they define also tagged
-       roles:
-        - { role: user, tags: [production] }
-    c/ Include - all tasks they define also tagged
-       - include: common.yml
-       tags: [testing]
-    $ ansible-playbook --tags "production"
-    $ ansible-playbook --skip-tags "development"
-    Special tags: always, tagged, untagged, all (default)
-
-  # Ignore and task errors
-    Default: If task fails, play is aborted immediatelly, same with handlers
-      To skip failed tasks, use 'ignore_errors: yes'
-    To force handler to be called even if task fails, use 'force_handlers: yes'
-    To mark task as failed even when it succeeds, use 'failed_when:
-       cmd: /usr/local/bin/create_user.show
-      register: command_result
-      failed_when: "'Password missing' in command_result.stdout"
-    Default: Task acquires 'changed' state after updating managed host, which causes handlers skipped if task does not make changed
-      changed_when: "'Success' in command_result.stdout"
-  
-  # Blocks - logical grouping of tasks, controls how are they executed
-    a/ block:        <-main tasks to run
-    b/ rescue:       <-tasks to run if block tasks fail
-    c/ always:       <-tasks to always run, independent on a/ or b/
-    tasks:
-     - block:
-       - shell:
-          cmd: /usr/local/lib/upgrade-database
-         rescue:
-       - shell:
-          cmd: /usr/local/lib/create-user
-         always:
-       - service:
-          name: mariadb
-          state: restarted
+  # Issues
+    a/ When value after : starts with { you need to " the whole object
+       app_path: "{{ base_path }}/bin"
+    b/ When you have nested {{...}} elements, remove the inner set:
+       msg: Host {{ params[{{ host_ip }}] }}            <-wrong
+       msg: Host {{ params[ host_ip] }}                 <-fine
 
 More information:
 http://jinja.pocoo.org/docs/dev/templates/#builtin-filters
 http://jinja.pocoo.org/docs/dev/templates/#builtin-tests
 
-
+###############################################################################
 ## Modules
  # Custom modules
    Priority in which the custom module is being processed:
@@ -430,6 +459,7 @@ http://jinja.pocoo.org/docs/dev/templates/#builtin-tests
    $ ansible-doc <MODULE>
    $ ansible-doc -s <MODULE>
 
+###############################################################################
 ## CLI:
 (1) Run a command somewhere else using Ansible
 $ ansible
@@ -529,7 +559,7 @@ Options:
                         ask for privilege escalation password
 
 
-
+###############################################################################
 (2) Run Ansible playbook
 $ ansible-playbook
 Usage: ansible-playbook playbook.yml
@@ -628,7 +658,7 @@ Options:
                         ask for privilege escalation password
 
 
-
+###############################################################################
 (3) Set up a remote copy of ansible on each managed node (clone Ansible configuration files from Git repository)
 $ ansible-pull 
 Usage: ansible-pull -U <repository> [options]
@@ -718,6 +748,7 @@ Options:
     -K, --ask-become-pass
                         ask for privilege escalation password
 
+###############################################################################
 (4) Accessing documentation locally
 $ ansible-doc
 Usage: ansible-doc [options] [module...]
