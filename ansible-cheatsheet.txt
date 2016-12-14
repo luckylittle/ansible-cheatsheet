@@ -25,6 +25,10 @@ become_method= Defines privilege escalation method
 become_user= User account for escalating privileges
 become_ask_pass= Defines whether privilege escalation prompts for password
 
+# Default module (command, NOT SHELL!) is defined in 'ansible.cfg' under 'defaults' section:
+$ grep module_name /etc/ansible/ansible.cfg
+  !If no modules defined, predefined command module used
+
 ###############################################################################
 ## Run the playbook(s):
   $ ansible -i localhost, <playbook>.yaml
@@ -34,9 +38,10 @@ become_ask_pass= Defines whether privilege escalation prompts for password
     !While the variable is a string, it will be used as the inventory PATH
 
 ## Ansible verbosity:
-$ ansible-playbook -v -i <HOST> <playbook>.yaml
-$ ansible-playbook -vv -i <HOST> <playbook>.yaml
-$ ansible-playbook -vvv -i <HOST> <playbook>.yaml
+$ ansible-playbook -v -i <HOST> <playbook>.yaml      <-displays output data
+$ ansible-playbook -vv -i <HOST> <playbook>.yaml     <-displays output & input data
+$ ansible-playbook -vvv -i <HOST> <playbook>.yaml    <-information about connections
+$ ansible-playbook -vvvv -i <HOST> <playbook>.yaml   <-information about plugins
 
 ###############################################################################
 ## Inventory file examples:
@@ -103,13 +108,21 @@ $ ansible <group> -m setup -a 'filter=*ipv4*'
 ###############################################################################
 # Run arbitrary command on all hosts as sudo:
 $ ansible all -s -a "cat /var/log/messages"
+
 # Run Ad Hoc module with arguments:
 $ ansible host pattern -m module -a 'argument1 argument2' [-i inventory]
+
 # Run ad hoc command that generates one line input for each operation:
 $ ansible myhosts -m command -a /usr/bin/hostname -o
-# Default module (command, NOT SHELL!) is defined in 'ansible.cfg' under 'defaults' section:
-$ grep module_name /etc/ansible/ansible.cfg
-  !If no modules defined, predefined command module used
+
+# Ad hoc Example: yum module checks if httpd installed on demohost:
+$ ansible demohost -u devops -b -m yum -a 'name=httpd state=present'
+
+# Ad hoc Example: Find available space on disks configured on demohost:
+$ ansible demohost -a "df -h"
+
+# Ad hoc Example: Find available free memory on demohost:
+$ ansible demohost -a "free -m"
 
 ###############################################################################
 ## Playbook(s) basics:
@@ -136,7 +149,9 @@ Notes:
   !Use YAML Lint http://yamllint.com to check the syntax correctness
   !Use 'ansible-playbook --syntax-check <MYAML.YML>'
   !Use 'ansible-playbook -C <MYAML.YML>' for dry run (what changes would occur if playbook is executed?)
+  !Use 'always_run: true' to execute only some tasks in check mode (or 'always_run: false' for the opposite)
   !Use 'ansible-playbook --step <MYAML.YML>' to prompt each task (y=yes/n=no/c=exit and execute remaining without asking)
+  !Use 'ansible-playbook <MYAML.YML> --start-at-task="start httpd service" to start execution from given task
   !For complex playbooks, use 'include' to include separate files in main playbook (include: tasks/env.yml)
 
 ###############################################################################
@@ -623,6 +638,70 @@ dependencies:
     f/ 'wait_for'
 
 ###############################################################################
+## Ansible vault
+(1a) Create encrypted file:
+     $ ansible-vault create <FILENAME>
+     $ ansible-vault create --vault-password-file=.secret_file <FILENAME>
+(2a) Enter and confirm new vault password
+
+(1b) Or encrypt and existing file(s):
+     $ ansible-vault encrypt <FILE1> <FILE2> ...
+     $ ansible-vault encrypt --output=NEW_FILE <OLDFILE>
+(2b) Enter and confirm new vault password
+
+(3) View file:
+    $ ansible-vault view <FILENAME>
+(4) Edit file:
+    $ ansible-vault edit <FILENAME>
+(5) Change password:
+    $ ansible-vault rekey <FILENAME1> <FILENAME2>
+    $ ansible-vault rekey --new-vault-password-file=.secret_file <FILENAME>
+(6) Decrypt file:
+    $ ansible-vault decrypt <FILENAME> --output=<FILENAME>
+Variable types:
+    a/ Defined in 'group_vars' or 'host_vars'
+    b/ Loaded by 'include_vars' or 'vars_files'
+    c/ Passed on 'ansible-playbook -e @file.yml'
+    d/ Defined as role variables & defaults
+    
+    $ ansible-playbook --ask-vault-pass <PLAY.YML>
+    $ ansible-playbook --vault-password-file=.secret_file <PLAY.YML>
+      or 'EXPORT ANSIBLE_VAULT_PASSWORD_FILE=~/.secret_file'
+
+###############################################################################
+## Troubleshooting
+   By default no log, but you can enable it:
+   a/ 'log_path' parameter under [default] in 'ansible.cfg'
+   b/ ANSIBLE_LOG_PATH environment variable
+
+# Debug mode examples:
+  - debug: msg="The free memory for this system is {{ ansible_memfree_mb }}"
+  - debug: var=output verbosity=2
+
+# Report changes made to templated files:
+  $ ansible-playbook --check --diff <MYAML.YML>
+
+# 'URI' module to check if RESTfuk API is returning required content:
+  tasks:
+  - action: uri url=http://api.myapp.com return_content=yes
+  register: apiresponse
+  - fail: msg='version was not provided'
+  when: "'version' not in apiresponse.content"
+
+# 'script' module to execute script on managed host (module fails if $? is other then 0):
+  taks:
+  - script: check_free_memory
+
+# 'stat' module to see if files/dirs not managed by Ansible are present
+  'assert' module to see if file exists in managed host
+  tasks:
+  - stat: path=/var/run/app.lock
+  register: lock
+  - assert:
+  that:
+  - lock.stat.exists
+
+###############################################################################
 ## CLI:
 (1) Run a command somewhere else using Ansible
 $ ansible
@@ -929,7 +1008,6 @@ Options:
 ###############################################################################
 (5) Ansible Galaxy tool
 $ ansible-galaxy
- [WARNING]: Optional dependency 'cryptography' raised an exception, falling back to 'Crypto'
 
 Usage: ansible-galaxy [delete|import|info|init|install|list|login|remove|search|setup] [--help] [options] ...
 
@@ -949,3 +1027,22 @@ Examples:
  ansible-galaxy remove <ROLE>
  ansible-galaxy init <ROLE>
  ansible-galaxy init --offline <ROLE>
+
+###############################################################################
+(6) Hiding secrets
+$ ansible-vault
+
+Usage: ansible-vault [create|decrypt|edit|encrypt|rekey|view] [--help] [options] vaultfile.yml
+
+Options:
+  --ask-vault-pass      ask for vault password
+  -h, --help            show this help message and exit
+  --new-vault-password-file=NEW_VAULT_PASSWORD_FILE
+                        new vault password file for rekey
+  --output=OUTPUT_FILE  output file name for encrypt or decrypt; use - for
+                        stdout
+  --vault-password-file=VAULT_PASSWORD_FILE
+                        vault password file
+  -v, --verbose         verbose mode (-vvv for more, -vvvv to enable
+                        connection debugging)
+  --version             show program's version number and exit
