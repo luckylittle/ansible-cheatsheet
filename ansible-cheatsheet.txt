@@ -359,7 +359,19 @@ b/ Passed as arguments:
       failed_when: "'Password missing' in command_result.stdout"
     Default: Task acquires 'changed' state after updating managed host, which causes handlers skipped if task does not make changed
       changed_when: "'Success' in command_result.stdout"
-  
+
+###############################################################################
+## Environmental variables
+
+   a/ Set env:
+   environment:
+    http_proxy: http://demo.lab.example.com:8080
+
+   b/ Reference vars inside playbook:
+   - block:
+     environment:
+      name: "{{ myname }}"
+
 ###############################################################################
 ## Blocks - logical grouping of tasks, controls how are they executed
     a/ block:        <-main tasks to run
@@ -376,6 +388,47 @@ b/ Passed as arguments:
        - service:
           name: mariadb
           state: restarted
+
+###############################################################################
+## Delegation using 'delegate_to' and 'local_action'
+   
+   a/ To localhost using delegate_to:
+   - name: Running Local Process
+     command: ps
+     delegate_to: localhost
+     register: local_process
+   
+   b/ To localhost using local_action:
+   - name: Running Local Process
+     local_action: command 'ps'
+     register: local_process
+
+   c/ Host outside play in inventory - example of removing managed hosts from ELB, upgrading and the adding them back:
+   - hosts: webservers
+     tasks:
+      - name: Remove server from load balancer
+        command: remove-from-lb {{ inventory_hostname }}
+        delegate_to: localhost
+      - name: Deploy the latest version of Webstack
+        git:repo=git://git.example.com/path/repo.git dest=/srv/www
+      - name: Add server back to ELB pool
+        command: add-to-lb {{ inventory_hostname }}
+        delegate_to: localhost
+  Inventory data used when creating connection to target:
+   ansible_connection
+   ansible_host
+   ansible_port
+   ansible_user
+
+   d/ Host outside play NOT in inventory using 'add_host':
+   - name: Add delegation host
+     add_host: name=demo ansible_host=172.25.250.10 ansible_user=devops
+   - name: Silly echo
+     command: echo {{ inventory_hostname }}
+     delegate_to: demo
+
+!Facts gathered by delegated tasks assigned to 'delegate_to' host, not host that produced facts
+!To gather facts from delegated host, set 'delegate_facts: True' in the play
 
 ###############################################################################
 ## Jinja2 Template(s) - no need for file extension:
@@ -534,6 +587,40 @@ dependencies:
    $ ansible-doc -l                       <-list all modules
    $ ansible-doc <MODULE>                 <-help for the module
    $ ansible-doc -s <MODULE>              <-simple view for the module
+
+###############################################################################
+## Optimizations
+(1) Default 'smart' settings (transport=smart in ansible.cfg):
+    a/ check if locally installed SSH supports 'ControlPersist', if not, 'paramiko' is used
+    b/ ControlPersist=60s (listed as comment in /etc/ansible/ansible.cfg)
+(2) Other settings include:
+    a/ paramiko (Python implementation of SSHv2, does not have ControlPersist)
+    b/ local    (runs locally and not over SSH)
+    c/ ssh      (uses OpenSSH)
+    d/ docker   (uses docker exec)
+    e/ plug-ins (not based on SSH, e.g. chroot, libvirt_lxc...)
+(3) Change on-the-fly settings with 
+    a/ $ ansible-playbook <PLAYBOOK> -c <TRANSPORT_NAME>
+    b/ $ ansible <PLAYBOOK> -c <TRANSPORT_NAME>
+(4) SSH settings are under [ssh_connection]
+(5) Paramiko settings are under [paramiko_connection]
+(6) To specify connection type in the inventory file, use 'ansible_connection':
+    [targets]
+    localgost ansible_connection=local
+    demo.lab.example.com ansible_connection=ssh
+(7) To specify connection type in play:
+    ---
+    - name: Connection type
+      hosts: 127.0.0.01
+      connection: local
+(8) To limit concurrent connection, use SSH server's 'MaxStartups' option
+(9) Parallelism - by default 5 different machines at once:
+    a/ setting 'forks' in 'ansible.cfg'
+    b/ $ ansible-playbook --forks
+    c/ 'serial' in the play overrides 'ansible.cfg' - either number or %
+    d/ 'async' & 'async_status' - value is time that Ansible waits for command to complete [default 3600s, long tasks 0]
+    e/ 'pool' - sets how often Ansible checks if command has completed [default 10s, long tasks 0]
+    f/ 'wait_for'
 
 ###############################################################################
 ## CLI:
