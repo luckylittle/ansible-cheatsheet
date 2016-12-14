@@ -1,5 +1,5 @@
 ###############################################################################
-## Lucian Maly <lmaly@odecee.com.au>
+## Lucian Maly <lmaly@odecee.com.au>                                 2016-12-14
 ###############################################################################
 
 ## Ansible works best if the passwordless access is configured on all nodes:
@@ -57,7 +57,7 @@ $ ansible-playbook -vvv -i <HOST> <playbook>.yaml
     localhost ansible_connection=local                        <-it will use local connection, without SSH
     192.168.3.7 ansible_connection=ssh ansible_user=ftaylor   <-use different settings example
 
-  # Dynamic inventory - AWS
+  # Dynamic inventory - AWS custom script
   !Script must support '--list' an '--host' parameters, e.g.:
   $ ./inventiryscript --list
     $ sudo cp ec2.py /etc/ansible/
@@ -80,7 +80,39 @@ $ ansible 'datacenter:!test2.example.com' -i <myinventory> --list-hosts   <-excl
 $ ansible-playbook <playbook>.yaml --list-tasks
 
 ###############################################################################
-## Playbook basics:
+## See the metadata obtained during Ansible setup (module setup):
+$ ansible all -i <HOST>, -m setup
+$ ansible <group> -m setup
+$ ansible <group> -m setup --tree facts
+# Show the specific metadata:
+$ ansible <group> -m setup -a 'filter=*ipv4*'
+  # Examples:
+  {{ ansible_hostname }}
+  {{ ansible_default_ipv4.address }}
+  {{ ansible_devices.vda.partitions.vda1.size }}
+  {{ ansible_dns.nameservers }}
+  {{ ansible_kernel }}
+# To disable facts:
+  gather_facts: no
+# Custom facts are saved under ansible_local:
+  $ cat /etc/ansible/facts.d/new.fact    <-ini or json file
+  $ ansible demo1.example.com -m setup -a 'filter=ansible_local'
+# Accessing facts of another node:
+  {{ hostvars['demo2.example.com']['ansible_os_family'] }}
+
+###############################################################################
+# Run arbitrary command on all hosts as sudo:
+$ ansible all -s -a "cat /var/log/messages"
+# Run Ad Hoc module with arguments:
+$ ansible host pattern -m module -a 'argument1 argument2' [-i inventory]
+# Run ad hoc command that generates one line input for each operation:
+$ ansible myhosts -m command -a /usr/bin/hostname -o
+# Default module (command, NOT SHELL!) is defined in 'ansible.cfg' under 'defaults' section:
+$ grep module_name /etc/ansible/ansible.cfg
+  !If no modules defined, predefined command module used
+
+###############################################################################
+## Playbook(s) basics:
 ---                                       <-indicates YAML, optional document marker
 - hosts: all                              <-host or host group against we will run the task (example - hosts: webserver)
   remote_user: lmaly                      <-as what user will Ansible log in to the machine(s)
@@ -328,8 +360,8 @@ b/ Passed as arguments:
     Default: Task acquires 'changed' state after updating managed host, which causes handlers skipped if task does not make changed
       changed_when: "'Success' in command_result.stdout"
   
-  ###############################################################################
-  ## Blocks - logical grouping of tasks, controls how are they executed
+###############################################################################
+## Blocks - logical grouping of tasks, controls how are they executed
     a/ block:        <-main tasks to run
     b/ rescue:       <-tasks to run if block tasks fail
     c/ always:       <-tasks to always run, independent on a/ or b/
@@ -344,38 +376,6 @@ b/ Passed as arguments:
        - service:
           name: mariadb
           state: restarted
-
-###############################################################################
-## See the metadata obtained during Ansible setup (module setup):
-$ ansible all -i <HOST>, -m setup
-$ ansible <group> -m setup
-$ ansible <group> -m setup --tree facts
-# Show the specific metadata:
-$ ansible <group> -m setup -a 'filter=*ipv4*'
-  # Examples:
-  {{ ansible_hostname }}
-  {{ ansible_default_ipv4.address }}
-  {{ ansible_devices.vda.partitions.vda1.size }}
-  {{ ansible_dns.nameservers }}
-  {{ ansible_kernel }}
-# To disable facts:
-  gather_facts: no
-# Custom facts are saved under ansible_local:
-  $ cat /etc/ansible/facts.d/new.fact    <-ini or json file
-  $ ansible demo1.example.com -m setup -a 'filter=ansible_local'
-# Accessing facts of another node:
-  {{ hostvars['demo2.example.com']['ansible_os_family'] }}
-
-###############################################################################
-# Run arbitrary command on all hosts as sudo:
-$ ansible all -s -a "cat /var/log/messages"
-# Run Ad Hoc module with arguments:
-$ ansible host pattern -m module -a 'argument1 argument2' [-i inventory]
-# Run ad hoc command that generates one line input for each operation:
-$ ansible myhosts -m command -a /usr/bin/hostname -o
-# Default module (command, NOT SHELL!) is defined in 'ansible.cfg' under 'defaults' section:
-$ grep module_name /etc/ansible/ansible.cfg
-  !If no modules defined, predefined command module used
 
 ###############################################################################
 ## Jinja2 Template(s) - no need for file extension:
@@ -447,6 +447,82 @@ http://jinja.pocoo.org/docs/dev/templates/#builtin-filters
 http://jinja.pocoo.org/docs/dev/templates/#builtin-tests
 
 ###############################################################################
+## Roles
+# Structure:
+  It looks for different roles at 'roles' subdirectory or 'role_path' dir in ansible.cfg (default /etc/ansible/roles)
+  Top-level = specifically named role name
+  Subdirs   = main.yml
+  files     = contains objects referenced by main.yml
+  templates = contains objects referenced by main.yml
+!Role tasks execute before tasks of play in which they appear
+!To override default, use 'pre_tasks' (performed before any roles applied) and 'post_tasks' (performed after all roles completed)
+
+# Example - folder structure:
+$ tree user.example
+user.example/
+├── defaults
+│   └── main.yml                 <-define default variables, easily overriden
+├── files                        <-fixed-content files, empty subdir is ignored
+├── handlers
+│   └── main.yml
+├── meta
+│   └── main.yml                 <-define dependency roles
+├── README.md
+├── tasks
+│   └── main.yml                 <-role content (defines modules to call on managed hosts where the role is applied
+├── templates                    <-contain templates
+├── tests
+│   ├── inventory
+│   └── test.yml
+└── vars                         
+│   └── main.yml                 <-vars for this module (best practice)
+└── main.yml
+
+# Use roles in play example:
+---
+- hosts: remote.example.com
+  roles:
+   - role1
+   - role2
+   - davidkarban.git            <-role from Ansible Galaxy using _AUTHOR.NAME_ 
+
+# Override default variables example:
+---
+- hosts: remote.example.com
+  roles:
+   - { role: role1 }
+   - { role: role2, var1: val1, var2: val2 }
+
+# Define dependency roles in meta/main.yml example:
+---
+dependencies:
+ - { role: apache, port: 8080 }
+ - { role: postgress, dbname: serverlist, admin_user: felix }
+!Role added as dependency to play once, to override default, set 'allow_duplicates=yes' in meta/main.yml
+
+# Content example of MOTD role (tasks/main.yml)
+---
+# tasks file for MOTD
+- name: deliver motd file
+  template:
+   src: templates/motd.j2
+   dest: /etc/motd
+   owner: root
+   group: root
+   mode: 0444
+
+# Role sources
+  $ cat roles2install.yml
+    # From Galaxy:
+    - src: author.rolename
+
+    # From different source:
+    - src: https://webserver.example.com/files.tgz
+      name: ftpserver-role
+  $ ansible-galaxy init -r roles2install.yml
+
+
+###############################################################################
 ## Modules
  # Custom modules
    Priority in which the custom module is being processed:
@@ -455,9 +531,9 @@ http://jinja.pocoo.org/docs/dev/templates/#builtin-tests
    3, ./library/ relative to location of playbook in use
  # Default modules
    $ cd /usr/lib/python2.7/site-packages/ansible/modules
-   $ ansible-doc -l
-   $ ansible-doc <MODULE>
-   $ ansible-doc -s <MODULE>
+   $ ansible-doc -l                       <-list all modules
+   $ ansible-doc <MODULE>                 <-help for the module
+   $ ansible-doc -s <MODULE>              <-simple view for the module
 
 ###############################################################################
 ## CLI:
@@ -762,3 +838,27 @@ Options:
   -v, --verbose         verbose mode (-vvv for more, -vvvv to enable
                         connection debugging)
   --version             show program's version number and exit
+
+###############################################################################
+(5) Ansible Galaxy tool
+$ ansible-galaxy
+ [WARNING]: Optional dependency 'cryptography' raised an exception, falling back to 'Crypto'
+
+Usage: ansible-galaxy [delete|import|info|init|install|list|login|remove|search|setup] [--help] [options] ...
+
+Options:
+  -h, --help     show this help message and exit
+  -v, --verbose  verbose mode (-vvv for more, -vvvv to enable connection
+                 debugging)
+  --version      show program's version number and exit
+Examples:
+ ansible-galaxy search --author <AUTHOR>
+ ansible-galaxy search --platforms <PLATFORM>
+ ansible-galaxy search --galaxy-tags <TAG>
+ ansible-galaxy info <ROLE>
+ ansible-galaxy install <ROLE> -p <ROLE_DIRECTORY>
+ ansible-galaxy install -r <ROLE1> <ROLE2> <ROLE3> ...
+ ansible-galaxy list
+ ansible-galaxy remove <ROLE>
+ ansible-galaxy init <ROLE>
+ ansible-galaxy init --offline <ROLE>
