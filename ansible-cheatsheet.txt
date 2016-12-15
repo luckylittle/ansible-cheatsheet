@@ -70,6 +70,8 @@ $ ansible-playbook -vvvv -i <HOST> <playbook>.yaml   <-information about plugins
     $ sudo chmod +x /etc/ansible/ec2.py
     $ ansible -i ec2.py all -m ping
 
+!Multiple inventory files in one dir = All the files in the directory are merged and treated as one inventory
+
 ###############################################################################
 ## Which hosts will the playbook run against?
 $ ansible-playbook <playbook>.yaml --list-hosts
@@ -347,6 +349,7 @@ b/ Passed as arguments:
     !If two handlers have same name, only one runs
     !Handler runs only once, even if notified by more than one task
     !Handlers defined inside 'include' cannot be notified
+    !--force-handlers
 
 ###############################################################################
 ## Resource tagging
@@ -441,6 +444,11 @@ b/ Passed as arguments:
    - name: Silly echo
      command: echo {{ inventory_hostname }}
      delegate_to: demo
+      args:                                             <-complex arguments can be added
+       chdir: somedir/
+       creates: /path/to/database
+
+   e/ 'run_once: True'
 
 !Facts gathered by delegated tasks assigned to 'delegate_to' host, not host that produced facts
 !To gather facts from delegated host, set 'delegate_facts: True' in the play
@@ -485,6 +493,7 @@ b/ Passed as arguments:
     '{{ output | to_nice_yaml }}
     '{{ output | from_json }}
     '{{ output | from_yaml }}
+    '{{ forest_blockers|split('-') }}'
 
   # Conditionals:
     { % ... % }
@@ -517,7 +526,7 @@ http://jinja.pocoo.org/docs/dev/templates/#builtin-tests
 ###############################################################################
 ## Roles
 # Structure:
-  It looks for different roles at 'roles' subdirectory or 'role_path' dir in ansible.cfg (default /etc/ansible/roles)
+  It looks for different roles at 'roles' subdirectory or 'roles_path' dir in ansible.cfg (default /etc/ansible/roles)
   Top-level = specifically named role name
   Subdirs   = main.yml
   files     = contains objects referenced by main.yml
@@ -534,7 +543,7 @@ user.example/
 ├── handlers
 │   └── main.yml
 ├── meta
-│   └── main.yml                 <-define dependency roles
+│   └── main.yml                 <-define dependency roles ('allow_duplicates: yes')
 ├── README.md
 ├── tasks
 │   └── main.yml                 <-role content (defines modules to call on managed hosts where the role is applied
@@ -636,6 +645,7 @@ dependencies:
     d/ 'async' & 'async_status' - value is time that Ansible waits for command to complete [default 3600s, long tasks 0]
     e/ 'pool' - sets how often Ansible checks if command has completed [default 10s, long tasks 0]
     f/ 'wait_for'
+    g/ pause module
 
 ###############################################################################
 ## Ansible vault
