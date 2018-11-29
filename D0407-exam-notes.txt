@@ -1,0 +1,349 @@
+##########################################################
+## THINGS THAT I FORGOT, BUT ARE IMPORTANT FOR THE EXAM ##
+##########################################################
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Dynamic inventories
+- dynamic inventory programs, when passed '--list' must output JSON hash/dict of hosts and/or groups
+- when passed '--host <name>' it must return JSON hash/dict of variables
+- must be executable and 0755, preferrably in the inventory directory and it will be combined with static inventory
+- if a static inventory specifies particular group should be a child of another group (even if all members of that group are dynamic), you need to have a placeholder entry (empty group) and
+  [xxxx:children]
+  group_name
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Ansible.cfg
+- inventory_ignore_extensions = ignore files in an inventory dir if they end with suffix
+- gather_facts = global true/false to gather facts. Should be disabled for network devices for example.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Facts
+- /etc/ansible/facts.d/*.fact
+- must be INI or JSON
+- stores it as 'ansible_local' variable and organized based on the file name:
+  e.g. "{{ ansible_local.<filename>.<section>.<variable> }}"
+       [section]
+       variable=value
+- example with adhoc command:
+  ansible <host> -m setup -a 'filter=ansible_local'
+- automatic "magic" variables that all hosts have:
+  {{ hostvars }}                                <-- access variables for another host
+  {{ group_names }}                             <-- list (array) of all the groups the current host is in
+  {{ groups }}                                  <-- list of all the groups (and hosts) in the inventory
+  {{ inventory_hostname }}                      <-- hostname as configured in Ansible’s inventory host file
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Inclusion
+- include: tasks/db.yml
+- vars_files                           <-- added immediately when play starts
+- include_vars: vars/variables_db.yml  <-- added when play reaches this point
+- host_vars                            <-- folder contain files named afer hosts
+- group_vars                           <-- folder contain files named after groups, can be 'all'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Loops
+"{{ item.name }}"
+"{{ item.sex }}"
+with_items:
+    - { name:'a', sex:'m' }
+    - { name:'b', sex:'f' }
+
+Loops - nested
+"{{ item[0] }}"
+"{{ item[1] }}"
+with_nested:
+    - ['a', 'b']
+    - ['id', 'sex']
+
+Loops - other
+with_file                           <-- iterates over the content of a list of files, item will be set to the content of each file in sequence
+with_fileglob                       <-- matches all files in a single directory, non-recursively, that match a pattern
+with_sequence                       <-- generates a sequence of items
+with_random_choice
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Conditionals
+when:
+==
+!=
+<
+<=
+>
+>=
+is defined
+is not defined
+<variable>                             <-- is true
+not <variable>                         <-- is false
+<variable> in <var_list>               <-- variable is present in other variable's list
+
+Multiple conditions: and, or
+result.rc == 0                         <-- test exit codes of the previous command output
+e.g. #1
+    when: inventory_hostname in groups['webservers'] and "(ansible_memory_mb.real.total) > (memory)"
+e.g. #2
+    - stat:
+        path: /.../...
+      register: OUTPUT
+    - shell: mv ... ...
+      when: OUTPUT.stat.exists
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Handlers
+TRIGGERED AT THE END OF A BLOCK OF TASKS IN PLAYBOOK AND ONLY IF TASK=CHANGED
+notify: restart_apache
+handlers:
+    - name: restart_apache
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Tags
+tags:
+    - packages
+    - always                           <-- special one!
+ansible-playbook <>.yml --tags 'packages'
+ansible-playbook <>.yml --skip-tags 'packages'
+Special flags for the above command: 'tagged', 'untagged', 'all'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Errors
+ignore_errors: yes
+force_handlers: yes                  <-- even if status:failed
+failed_when:                         <-- it runs the task first!
+    e.g. #1 
+    register: cmd_result
+    failed_when: "'Password' in cmd_result.stdout"
+changed_when:                        <-- if you know the task itself will never change the host, use 'false' here
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Blocks
+- block:
+  rescue:                            <-- run if the 'block:' fails
+  always:
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Jinja2
+{% EXPRESSION %}                     <-- for logic
+{# COMMENT #}
+{{ ANSIBLE EXPRESSION }}             <-- for result output
+e.g.
+    {% for... %}
+        {{...}}
+    {% endfor %}
+    {% if... %}
+        {{...}}
+    {% endif %}
+{{ output | to_json }}
+          | to_yaml
+          | to_nice_json
+          | to_nice_yaml
+          | from_json
+          | from_yaml
+Special variable: {{ ansible_managed }}
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Roles
+ANSIBLE LOOKS FOR SUBDIRECTORY "ROLES" INSIDE THE PROJECT, OR REFERENCE BY "roles_path" IN 'ansible.cfg'
+NORMALLY, THE TASKS OF ROLES EXECUTE BEFORE THE TASKS OF THE PLAYBOOKS THAT USE THEM. USE PRE_/POST_ FOR IT:
+- hosts: all
+  pre_tasks:
+  roles:
+    - role1
+    - role2
+  tasks:
+  post_tasks:
+
+Roles with overwriting variables
+- hosts: all
+  roles:
+    - role: role1
+      var: value1
+    - role: role2
+      var: value2
+
+Role dependencies
+./meta/main.yml
+e.g.
+    ---
+    dependencies:
+    - { role: myfw, myvar: httpd }
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Galaxy
+ansible-galaxy search 'text' --author --platforms --galaxy-tags
+ansible-galaxy info <name>
+ansible-galaxy install <name> -p <directory>
+ansible-galaxy installs -r <file.yml>
+ansible-galaxy init --offline <user.rolename>
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Optimizations
+Inventory special group: 'ungrouped'
+Wildcard host pattern:
+ansible '*.example.com' -i myinventory --list-hosts
+ansible '192.168.2.*' -i myinventory --list-hosts
+ansible 'datacenter*' -i myinventory --list-hosts
+
+IF YOU PROVIDE COMMA-SEPARATED LIST OF MANAGED HOSTS OR GROUPS, THEY WILL BE TARGETED
+IF THE ITEM STARTS WITH '&' THEN HOSTS MUST MATCH THAT ITEM IN ORDER TO MATCH HOST PATTERN (LOGICAL 'AND'):
+ansible 'lab,&datacenter' ...                       <-- 'lab' group only if it is also in 'datacenter' group
+EXCLUDING HOSTS USING '!' (LOGICAL 'NOT'):
+ansible 'datacenter,!test.lab.example.com'          <-- 'datacenter' group with exception of 'test.lab.example.com'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Delegation
+e.g. #1
+  delegate_to: localhost                            <-- performed on host running Ansible
+e.g. #2
+  delegate_to: loadbalancer-host
+e.g. #3
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups['proxyservers'] }}         <-- if it exists in the inventory
+- add_host:                                         <-- if it doesn't exist in the invetory, you need to add it
+    name: DEMO
+    ansible_host: 172.25.250.10
+    ansible_user: devops
+  name: ...
+  delegate_to: DEMO
+delegate_facts: true                                <-- assign gathered facts to delegated hosts
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Parallelism
+BY DEFAULT ANSIBLE FORKS UP TO 5 TIMES: forks = 5, --forks=5
+TEMPORARILY REDUCE THE NUMBER OF MACHINES RUNNING IN PARALLEL FROM THE FORK COUNT: serial: 2
+RUN THE JOB IN THE BACKGROUND AND CHECK BACK LATER:
+    async: 3600                                     <-- wait 3600s = 1 hour. async can be '1'
+    poll: 10                                        <-- monitor once every 10 seconds for completion. poll can be '0'
+e.g. #1
+- wait_for:
+    host: "{{ inventory_hostname }}"
+    state: started
+    delay: 30
+    timeout: 300
+    port: 22
+  delegate_to: localhost
+  become: false
+e.g. #2
+- async_status:
+    jid: "{{ register_async.ansible_job_id }}"
+  register: JOB_RESULT
+  until: JOB_RESULT.finished
+  retries: 30                                       <-- this is not in seconds!
+e.g. #3
+  - name: run the script ...
+    register: SCRIPT_SLEEPER
+  - name: check the script
+    async_status: "jid={{ item.ansible_job_id }}"
+    register: JOB_RESULT
+    until: JOB_RESULT.finished
+    retries: 30
+    with_items: "{{ SCRIPT_SLEEPER.results }}"
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Vault
+ansible-vault create <file.yml>
+ansible-vault edit <file.yml>
+ansible-vault rekey <file.yml>
+ansible-vault encrypt <file.yml> <file2.yml> ...
+ansible-vault view <file.yml>
+ansible-vault decrypt <file.yml> --output=decrypted_file.yml
+ansible-playbook --ask-vault-pass <.yml>
+ansible-playbook --vault-password-file=<pass.txt>
+$ANSIBLE_VAULT_PASSWORD_FILE
+PLAINTEXT PASSWORDS SHOULD GENERALLY BE CONVERTED TO HASH:
+"{{ 'passwd' | password_hash('sha512') }}"
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Troubleshooting
+'log_path' in 'ansible.cfg'
+$ANSIBLE_LOG_PATH
+ansible-playbook ... --step
+ansible-playbook ... --start-at-task
+ansible-playbook ... --check / -C
+ansible-playbook ... --diff
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#######################################
+## MISTAKES I MADE IN THE FINAL LABS ##
+#######################################
+Chapter 13 - Comprehensive review:
+- Lab1: Deploying Ansible
+- Lab2: Creating playbooks
+- Lab3: Creating roles and using dynamic inventory
+- Lab4: Optimizing Ansible
+- Lab5: Deploying Ansible Tower and executing jobs
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- firewalld:
+    immediate: yes
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- serial: 1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- haproxy:
+    state: disabled
+    backend: app
+    host: "{{ inventory_hostname }}"
+    socket: /var/lib/proxy/stats
+    wait: yes
+  delegate_to: "{{ item }}"
+  with_items: "{{ groups.lbservers }}"
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- shell: /bin/sleep 5 && shutdown now
+  async: 1
+  poll: 0
+  ignore_errors: true
+  when: pageupgrade.changed
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- 'mount:' module actually edits /etc/fstab
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- ansible dev -m copy -a 'content="text" dest=/etc/motd' -b -u devops
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- when installing Ansible Tower, do it as root on tower.lab.example.com, not from the workstation
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- 'unarchive:' module can use http:// as the 'src:'
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+- IF YOU USE TRAILING SLASH AFTER THE SOURCE DIR IN 'copy:' MODULE, IT WILL COPY THE ENTIRE CONTENT:
+  - name: ...
+    copy:
+      src: html/
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+SOME LESS KNOWN ANSIBLE MODULES WORTH EXPLORING
+ansible-doc uri                     <-- interacts with HTTP/HTTPS endpoints
+ansible-doc fail                    <-- fails the progress with a custom message
+ansible-doc script                  <-- fails if rc != 0
+ansible-doc stat                    <-- retrieves facts for a file similar to the linux/unix 'stat' command
+ansible-doc assert                  <-- asserts that given expressions are true with an optional custom message
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
