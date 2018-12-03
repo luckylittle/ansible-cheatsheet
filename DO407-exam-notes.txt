@@ -42,6 +42,7 @@ Inclusion
 - include_vars: vars/variables_db.yml  <-- added when play reaches this point
 - host_vars                            <-- folder contain files named afer hosts
 - group_vars                           <-- folder contain files named after groups, can be 'all'
+- include_role                         <-- helps with sequentially running tasks (instead of pre_tasks/roles/post_tasks)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -127,6 +128,7 @@ Blocks
 - block:
   rescue:                            <-- run if the 'block:' fails
   always:
+BLOCKS IS A NICE WAY OF SOLVING HANDLERS - YOU CAN CALL HANDLER IN BETWEEN THE BLOCKS.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -182,7 +184,7 @@ e.g.
 Galaxy
 ansible-galaxy search 'text' --author --platforms --galaxy-tags
 ansible-galaxy info <name>
-ansible-galaxy install <name> -p <directory>
+ansible-galaxy install <name> -p <directory>                  <-- without '-p' it will use the 'roles_path'
 ansible-galaxy installs -r <file.yml>
 ansible-galaxy init --offline <user.rolename>
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -272,10 +274,17 @@ PLAINTEXT PASSWORDS SHOULD GENERALLY BE CONVERTED TO HASH:
 Troubleshooting
 'log_path' in 'ansible.cfg'
 $ANSIBLE_LOG_PATH
+'verbosity:' can be added to the individual 'debug' task
 ansible-playbook ... --step
 ansible-playbook ... --start-at-task
 ansible-playbook ... --check / -C
 ansible-playbook ... --diff
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Tower
+Customized 'ansible.cfg' should be in the root of project folder and Tower will automatically use it.
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #######################################
