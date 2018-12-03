@@ -284,7 +284,6 @@ ansible-playbook ... --diff
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 Tower
 Customized 'ansible.cfg' should be in the root of project folder and Tower will automatically use it.
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #######################################
