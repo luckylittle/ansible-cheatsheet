@@ -1,5 +1,5 @@
 ###############################################################################
-## Lucian Maly <lmaly@odecee.com.au>                                 2016-12-14
+## Lucian Maly <lmaly@odecee.com.au>                                 2018-12-04
 ###############################################################################
 
 ## Ansible works best if the passwordless access is configured on all nodes:
@@ -1118,3 +1118,40 @@ Options:
   -v, --verbose         verbose mode (-vvv for more, -vvvv to enable
                         connection debugging)
   --version             show program's version number and exit
+
+###############################################################################
+(7) Windows
+$ pip install pywinrm       <-- on the control machine
+
+Authentication:
+a/ Certificate: authentication similar to SSH
+b/ Kerberos: python-kerberos
+c/ CredSSP: for local and domain accounts
+
+On the client(s):
+a/ PowerShell 3.0 or higher
+b/ Enable PowerShell
+c/ Set up WinRM:
+   https://github.com/ansible/ansible/blob/devel/examples/scripts/ConfigureRemotingForAnsible.ps1
+
+For Kerberos, on the client(s):
+python-devel, krb5-devel, krb5-libs, krb5-workstation, pywinrm
+/etc/krb5.conf.d/ansible.conf
+[realms]
+ad1.${GUID}.example.com = {
+  kdc = ad1.${GUID}.example.opentlc.com
+}
+
+'ansible.cfg' example:
+ansible_connection=winrm
+ansible_user=Administrator
+
+Windows Ansible modules examples:
+win_ping
+win_chocolatey
+win_service
+win_firewall
+win_firewall_rule
+win_user
+win_domain_user
+win_domain_controller
