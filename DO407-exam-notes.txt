@@ -3,13 +3,30 @@
 ##########################################################
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-Dynamic inventories
+Dynamic & in-memory inventories
 - dynamic inventory programs, when passed '--list' must output JSON hash/dict of hosts and/or groups
 - when passed '--host <name>' it must return JSON hash/dict of variables
 - must be executable and 0755, preferrably in the inventory directory and it will be combined with static inventory
+- with 'ec2.py' you can use AWS tags (ec2_tag_instance_filter) for example:
+  ansible -i ec2.py TAG_KEY*TAG_VALUE* --list-hosts
+  ansible -i ec2.py ec2_tag_instance_filter*lucian* --list-hosts
+    Script returns:
+    tag_instance_filter_three_tier_app_lucian":[
+      "52.22.70.3",
+      "52.22.70.4" ... ... ...
+    ]
+  ANSIBLE USES TAG(S) AS THE HOST GROUP(S)
 - if a static inventory specifies particular group should be a child of another group (even if all members of that group are dynamic), you need to have a placeholder entry (empty group) and
   [xxxx:children]
-  group_name
+  group_name            <-- for example 'tag_instance_filter_thee_tier_app_lucian'
+- If you run lot of playbooks sequentially, dynamic inventory may change in between them so you might want to use in-memory inventory instead:
+  - add_host: name={{ public_v4 }} groups=created_vms myvariable=42
+  ESSENTIALLY THIS CREATES VIRTUAL INVENTORY, IN-MEMORY, ON DEMAND (WHEN IT RUNS), WHICH LASTS THROUGHOUT THE LIFE OF THE PLAY:
+  - hosts: localhost
+    gather_facts: false
+    roles:
+      - in-memory-inventory-role
+  - hosts: <APPS_GROUP_FROM_THE_PREVIOUS_STEP> ... ... ...
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -200,6 +217,7 @@ ansible 'datacenter*' -i myinventory --list-hosts
 IF YOU PROVIDE COMMA-SEPARATED LIST OF MANAGED HOSTS OR GROUPS, THEY WILL BE TARGETED
 IF THE ITEM STARTS WITH '&' THEN HOSTS MUST MATCH THAT ITEM IN ORDER TO MATCH HOST PATTERN (LOGICAL 'AND'):
 ansible 'lab,&datacenter' ...                       <-- 'lab' group only if it is also in 'datacenter' group
+ansible -i ec2.py tag_prod&tag_webserver -m ping    <-- only webservers in prod
 EXCLUDING HOSTS USING '!' (LOGICAL 'NOT'):
 ansible 'datacenter,!test.lab.example.com'          <-- 'datacenter' group with exception of 'test.lab.example.com'
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
