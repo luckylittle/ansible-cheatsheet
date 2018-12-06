@@ -302,6 +302,16 @@ ansible-playbook ... --diff
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 Tower
 Customized 'ansible.cfg' should be in the root of project folder and Tower will automatically use it.
+You should put 'ansible_become=true' in the 'inventory' if you are installing it on mutiple machines
+For the HA environment:
+  - minimum of three nodes (one for housekeeping, one for user jobs, one will statistically fail).
+  - if any service fail, all services are restarted. If this happens multiple times, the entire node will be placed offline.
+  - license does not care how many Tower nodes you have, but rather how many nodes are you managing with the cluster.
+  - isolated node(s) are headless Tower(s), only running Ansible(s) in a remote destination acting as a "bastion"
+System capacity formula:
+  No. forks + ((RAM/1024)-2) * 75, but also keep in mind 2 CPUS per 20 forks
+  e.g.: 5+((4096/1024)-2)*75=155
+tower-cli: pip install ansible-tower-cli
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 #######################################
@@ -351,7 +361,7 @@ Chapter 13 - Comprehensive review:
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-- when installing Ansible Tower, do it as root on tower.lab.example.com, not from the workstation
+- when installing Ansible Tower, do it as root on tower.lab.example.com, not from the workstation (if it's a single node install)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
