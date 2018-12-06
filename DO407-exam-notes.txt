@@ -302,7 +302,8 @@ ansible-playbook ... --diff
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 Tower
 Customized 'ansible.cfg' should be in the root of project folder and Tower will automatically use it.
-You should put 'ansible_become=true' in the 'inventory' if you are installing it on mutiple machines
+You should put 'ansible_become=true' in the 'inventory' if you are installing it on mutiple machines.
+If you are using localhost, do NOT change the default setting of 'rabbitmq_use_long_name=false' to 'true'.
 For the HA environment:
   - minimum of three nodes (one for housekeeping, one for user jobs, one will statistically fail).
   - if any service fail, all services are restarted. If this happens multiple times, the entire node will be placed offline.
