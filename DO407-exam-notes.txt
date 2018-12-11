@@ -82,6 +82,23 @@ with_file                           <-- iterates over the content of a list of f
 with_fileglob                       <-- matches all files in a single directory, non-recursively, that match a pattern
 with_sequence                       <-- generates a sequence of items
 with_random_choice
+with_dict
+with_subelements
+
+Loop over vars file containing linux groups and their corresponding users:
+wheel:
+  - john
+  - paul
+  - margaret
+docker:
+  - mark
+Solution:
+- debug:
+    msg: "I am creating user {{ item.name }} in a group {{ item.group }}"
+  with_items:
+    - { group: 'wheel', name: "{{ wheel }}" }
+    - { group: 'docker', name: "{{ docker }}" }
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -195,6 +212,15 @@ e.g.
     ---
     dependencies:
     - { role: myfw, myvar: httpd }
+
+Selectively run tasks in play:
+---
+- hosts: node1, node2
+  tasks:
+    - name: ...
+- hosts: node3, node4
+  tasks:
+    - name: ...
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -383,4 +409,5 @@ ansible-doc fail                    <-- fails the progress with a custom message
 ansible-doc script                  <-- fails if rc != 0
 ansible-doc stat                    <-- retrieves facts for a file similar to the linux/unix 'stat' command
 ansible-doc assert                  <-- asserts that given expressions are true with an optional custom message
+ansible-doc replace                 <-- replace all instances of a pattern within a file
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
